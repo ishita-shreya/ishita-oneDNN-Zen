@@ -46,12 +46,12 @@ status_t stream_impl_t::init(
                 "Level Zero kernel profiling is not supported with "
                 "out-of-order queues");
         return status::invalid_arguments;
-    } else if ((flags() & stream_flags::out_of_order)
-            || is_profiling_enabled()) {
+    } else if ((flags() & stream_flags::out_of_order) || is_profiling_enabled()
+            || is_verbose_profiler_enabled()) {
         ze_event_pool_desc_t event_pool_desc {};
         event_pool_desc.stype = ZE_STRUCTURE_TYPE_EVENT_POOL_DESC;
         event_pool_desc.flags = ZE_EVENT_POOL_FLAG_HOST_VISIBLE;
-        if (is_profiling_enabled())
+        if (is_profiling_enabled() || is_verbose_profiler_enabled())
             event_pool_desc.flags |= ZE_EVENT_POOL_FLAG_KERNEL_TIMESTAMP;
         // Note: 16K number is taken randomly as big enough to fit mode=F perf
         // validation or a single model profiling.
@@ -116,6 +116,16 @@ status_t stream_impl_t::wait() {
 status_t stream_impl_t::barrier() {
     ZE_CHECK(ze::zeCommandListAppendBarrier(list_, nullptr, 0, nullptr));
 
+    return status::success;
+}
+
+status_t stream_impl_t::init_verbose_profiler(engine_kind_t eng) {
+    use_verbose_profiler_ = false;
+    if (!get_verbose(verbose_t::exec_profile)) return status::success;
+    if (eng != engine_kind::gpu) return status::success;
+    // verbose profiling support is only for in-order queues
+    if (flags() & stream_flags::out_of_order) return status::success;
+    use_verbose_profiler_ = true;
     return status::success;
 }
 
