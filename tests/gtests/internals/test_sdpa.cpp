@@ -119,11 +119,22 @@ struct head_group_size_t {
     memory::dim head_size;
     int kgroup_size;
     int vgroup_size;
+    // Value/output head size (d_v). 0 means "same as head_size" (d_qk == d_v).
+    memory::dim v_head_size;
+
+    // Effective value/output head size.
+    memory::dim v_size() const {
+        return v_head_size != 0 ? v_head_size : head_size;
+    }
+    bool asymmetric() const { return v_size() != head_size; }
 };
 
 std::ostream &operator<<(
         std::ostream &ss, const head_group_size_t &head_group) {
     ss << "Head Size(D)=" << head_group.head_size;
+    if (head_group.asymmetric()) {
+        ss << " ValueHeadSize(Dv)=" << head_group.v_size();
+    }
     if (head_group.head_size != head_group.kgroup_size
             || head_group.head_size != head_group.vgroup_size) {
         ss << " Group Size=";
@@ -337,6 +348,7 @@ std::ostream &operator<<(std::ostream &ss, const sdpa_dims_t &p) {
     if (p.heads.kv != p.heads.q) { ss << "_KVN" << p.heads.kv; }
     ss << "_N" << p.heads.q;
     ss << "_D" << p.head_group.head_size;
+    if (p.head_group.asymmetric()) ss << "_Dv" << p.head_group.v_size();
     if (p.head_group.head_size != p.head_group.kgroup_size
             || p.head_group.head_size != p.head_group.vgroup_size) {
         ss << "_" << p.head_group.kgroup_size << "x";
@@ -576,7 +588,11 @@ sdpa_tensors_t get_descriptors(dnnl::engine &eng, dnnl::stream &strm,
     const memory::dims k_t_stride
             = {p.mb, p.heads.kv, p.seq_len.kv * 2, p.head_group.head_size};
     const memory::dims v_sz
-            = {p.mb, p.heads.kv, p.seq_len.kv, p.head_group.head_size};
+            = {p.mb, p.heads.kv, p.seq_len.kv, p.head_group.v_size()};
+    // Output/attention head size equals the value head size (d_v), which may
+    // differ from the query/key head size (d_qk) for asymmetric heads.
+    const memory::dims out_sz
+            = {p.mb, p.heads.q, p.seq_len.q, p.head_group.v_size()};
     const memory::dims dS_sz = {p.mb, p.heads.q, p.seq_len.q, p.seq_len.kv};
     const memory::dims scale_sz = {1, 1, 1, 1};
 
@@ -659,8 +675,8 @@ sdpa_tensors_t get_descriptors(dnnl::engine &eng, dnnl::stream &strm,
 
 
     auto mask_md             = memory::desc(mask_sz,       p.mask.dt != mdt::undef ? p.mask.dt : p.dt.dt,   abcd);
-    auto output_md           = memory::desc(q_sz,          p.dt.dt,     abcd);
-    auto output_quantized_md = memory::desc(q_sz,          p.dt.dt,     abcd);
+    auto output_md           = memory::desc(out_sz,        p.dt.dt,     abcd);
+    auto output_quantized_md = memory::desc(out_sz,        p.dt.dt,     abcd);
 
     auto dS_md            = memory::desc(dS_sz,          p.dt.dt,      abcd);
     // clang-format on
@@ -708,7 +724,7 @@ sdpa_tensors_t get_descriptors(dnnl::engine &eng, dnnl::stream &strm,
     std::vector<float> val_quantized_data(product(v_sz), 0);
     std::vector<float> key_scale_data(product(key_scales_sz), std::nanf("1"));
     std::vector<float> val_scale_data(product(val_scales_sz), std::nanf("1"));
-    std::vector<float> diff_output_data(product(q_sz), 0.f);
+    std::vector<float> diff_output_data(product(out_sz), 0.f);
 
     std::vector<int> key_zp_data_signed(product(key_scales_sz), INT_MAX);
     std::vector<int> val_zp_data_signed(product(val_scales_sz), INT_MAX);
@@ -717,7 +733,7 @@ sdpa_tensors_t get_descriptors(dnnl::engine &eng, dnnl::stream &strm,
     std::vector<unsigned> val_zp_data_unsigned(product(val_scales_sz), INT_MAX);
 
     std::vector<float> mask_data(product(mask_sz), NAN);
-    std::vector<float> output_data(product(q_sz), NAN);
+    std::vector<float> output_data(product(out_sz), NAN);
     std::vector<float> dS_data(product(dS_sz), 0);
 
     out.sdpa_attr_quantized.set_scratchpad_mode(dnnl::scratchpad_mode::library);
@@ -1200,12 +1216,16 @@ void prim_sdpa_quant(const sdpa_dims_t &p, const sdpa_tensors_t &t,
     const memory::dims k_sz {p.mb, head_group_batches, head_kv_group_size,
             original_k_sz[2], original_k_sz[3]};
     const memory::dims v_sz {p.mb, head_group_batches, head_kv_group_size,
-            p.seq_len.kv, p.head_group.head_size};
+            p.seq_len.kv, p.head_group.v_size()};
     const memory::dims q_sz {p.mb, head_group_batches, head_q_group_size,
             p.seq_len.q, p.head_group.head_size};
+    // Output head size follows the value head size (d_v).
+    const memory::dims out_sz {p.mb, head_group_batches, head_q_group_size,
+            p.seq_len.q, p.head_group.v_size()};
     memory::desc grouped_key_md(k_sz, p.dt.dt, memory::format_tag::abcde);
     memory::desc grouped_value_md(v_sz, mdt::f32, memory::format_tag::abcde);
     memory::desc grouped_query_md(q_sz, p.dt.dt, memory::format_tag::abcde);
+    memory::desc grouped_output_md(out_sz, p.dt.dt, memory::format_tag::abcde);
 
     memory key_dequantized;
     if ((key.get_desc().get_data_type() != mdt::f16
@@ -1355,22 +1375,22 @@ void prim_sdpa_quant(const sdpa_dims_t &p, const sdpa_tensors_t &t,
         bmm2_attr.set_accumulation_mode(dnnl::accumulation_mode::f16);
     }
     memory::desc grouped_output_f16_md(
-            grouped_query_md.get_dims(), mdt::f16, memory::format_tag::abcde);
+            grouped_output_md.get_dims(), mdt::f16, memory::format_tag::abcde);
     auto grouped_output_f16 = memory(grouped_output_f16_md, eng);
     auto grouped_output
-            = double_and_resize(grouped_query_md, eng, strm, doubled_memory);
+            = double_and_resize(grouped_output_md, eng, strm, doubled_memory);
 
     // matmul primitive for VS
     auto bmm2_pd = is_vs_acc_f16
             ? matmul::primitive_desc(eng, score_f16_md, grouped_value_md,
                       grouped_output_f16_md, bmm2_attr)
             : matmul::primitive_desc(eng, score_md, grouped_value_md,
-                      grouped_query_md, bmm2_attr);
+                      grouped_output_md, bmm2_attr);
     auto bmm2_prim = matmul(bmm2_pd);
 
     // reorder primitive to convert f16 to f32 after bmm2
     auto f16_to_f32_output_pd = dnnl::reorder::primitive_desc(
-            eng, grouped_output_f16_md, eng, grouped_query_md);
+            eng, grouped_output_f16_md, eng, grouped_output_md);
     auto f16_to_f32_output_prim = dnnl::reorder(f16_to_f32_output_pd);
 
     // setup args
@@ -1472,7 +1492,7 @@ void prim_sdpa_quant(const sdpa_dims_t &p, const sdpa_tensors_t &t,
 
     void *output_ptr_ = (void *)output.map_data();
     void *grouped_output_ptr_ = (void *)grouped_output.map_data();
-    memcpy(output_ptr_, grouped_output_ptr_, grouped_query_md.get_size());
+    memcpy(output_ptr_, grouped_output_ptr_, grouped_output_md.get_size());
     grouped_output.unmap_data(grouped_output_ptr_);
     output.unmap_data(output_ptr_);
     strm.wait();
@@ -2986,6 +3006,67 @@ INSTANTIATE_TEST_SUITE_P(ScaleTypes_f32, sdpa_test_datatypes,
                 ::testing::Values(dnnl::memory::format_tag::abdc), // key_format_tag
                 ::testing::Values(mask_config_t {mask_type::no_mask}), // mask_type
                 ::testing::Values(scale_type::device_side,scale_type::host_side), // scale_type
+                ::testing::Values(accumulation_t {accumulation_mode::f32, accumulation_mode::f32}), // accumulation_mode
+                ::testing::Values(no_dropout) // dropout
+                ),
+        &print_to_string2);
+
+// Asymmetric attention heads: query/key head size (d_qk) differs from the
+// value/output head size (d_v). Mirrors the benchdnn harness_mha_all
+// "d_qk != d_v" cases. Forward inference only.
+INSTANTIATE_TEST_SUITE_P(AsymmetricHeads_f16, sdpa_test_datatypes,
+        testing::Combine(::testing::Values(1), // mb
+                ::testing::Values(num_heads_t {16, 16}), // hd_num
+                ::testing::Values(seq_len_size_t {384, 384}), // seq_len
+                ::testing::Values(head_group_size_t {64, 64, 64, 32},
+                        head_group_size_t {128, 128, 128, 64}), // hd_size (d_qk=64,d_v=32 and d_qk=128,d_v=64)
+                ::testing::Values(tensor_type_t("Q", mdt::f16)), // dt
+                ::testing::Values(tensor_type_t("K", mdt::f16)), // kdt
+                ::testing::Values(tensor_type_t("V", mdt::f16)), // vdt
+                ::testing::Values(quantize_type::no_quantization), // qtype
+                ::testing::Values(dnnl::memory::format_tag::abdc), // key_format_tag
+                ::testing::Values(mask_config_t {mask_type::no_mask},
+                        mask_config_t {mask_type::causal_tl},
+                        mask_config_t {mask_type::causal_br}), // mask_type
+                ::testing::Values(scale_type::device_side), // scale_type
+                ::testing::Values(accumulation_t {accumulation_mode::f32, accumulation_mode::f32}), // accumulation_mode
+                ::testing::Values(no_dropout) // dropout
+                ),
+        &print_to_string2);
+INSTANTIATE_TEST_SUITE_P(AsymmetricHeads_bf16, sdpa_test_datatypes,
+        testing::Combine(::testing::Values(1), // mb
+                ::testing::Values(num_heads_t {16, 16}), // hd_num
+                ::testing::Values(seq_len_size_t {384, 384}), // seq_len
+                ::testing::Values(head_group_size_t {64, 64, 64, 32},
+                        head_group_size_t {128, 128, 128, 64}), // hd_size (d_qk=64,d_v=32 and d_qk=128,d_v=64)
+                ::testing::Values(tensor_type_t("Q", mdt::bf16)), // dt
+                ::testing::Values(tensor_type_t("K", mdt::bf16)), // kdt
+                ::testing::Values(tensor_type_t("V", mdt::bf16)), // vdt
+                ::testing::Values(quantize_type::no_quantization), // qtype
+                ::testing::Values(dnnl::memory::format_tag::abdc), // key_format_tag
+                ::testing::Values(mask_config_t {mask_type::no_mask},
+                        mask_config_t {mask_type::causal_tl},
+                        mask_config_t {mask_type::causal_br}), // mask_type
+                ::testing::Values(scale_type::device_side), // scale_type
+                ::testing::Values(accumulation_t {accumulation_mode::f32, accumulation_mode::f32}), // accumulation_mode
+                ::testing::Values(no_dropout) // dropout
+                ),
+        &print_to_string2);
+INSTANTIATE_TEST_SUITE_P(AsymmetricHeads_f32, sdpa_test_datatypes,
+        testing::Combine(::testing::Values(1), // mb
+                ::testing::Values(num_heads_t {16, 16}), // hd_num
+                ::testing::Values(seq_len_size_t {384, 384}), // seq_len
+                ::testing::Values(head_group_size_t {64, 64, 64, 32},
+                        head_group_size_t {128, 128, 128, 64}), // hd_size (d_qk=64,d_v=32 and d_qk=128,d_v=64)
+                ::testing::Values(tensor_type_t("Q", mdt::f32)), // dt
+                ::testing::Values(tensor_type_t("K", mdt::f32)), // kdt
+                ::testing::Values(tensor_type_t("V", mdt::f32)), // vdt
+                ::testing::Values(quantize_type::no_quantization), // qtype
+                ::testing::Values(dnnl::memory::format_tag::abdc), // key_format_tag
+                ::testing::Values(mask_config_t {mask_type::no_mask},
+                        mask_config_t {mask_type::causal_tl},
+                        mask_config_t {mask_type::causal_br}), // mask_type
+                ::testing::Values(scale_type::device_side), // scale_type
                 ::testing::Values(accumulation_t {accumulation_mode::f32, accumulation_mode::f32}), // accumulation_mode
                 ::testing::Values(no_dropout) // dropout
                 ),
