@@ -1,8 +1,11 @@
 # Performance Optimizations
 ## Intel 64/AMD64 Processors
 * Improved performance on future Intel Core Ultra processors with Intel AVX10.2 instruction set support (codename Nova Lake).
+* Improved performance of matmul on processors with Intel AMX instruction set support.
+* Improved performance of `bf16/f16/f32` matmul with unit M/N or K dimentions (GEMV-like) on processors with Intel AVX2 instruction set support.
+* Improved performance of `u8/s8` matmul with `u4/s4` weights and grouped scales.
+* Improved peformance of `bf16/f16` matmul with `f8` weights.
 * Improved performance of `f8` [quantized Scaled Dot Product Attention (SDPA)] subgraph with Graph API.
-* 
 
 [quantized Scaled Dot Product Attention (SDPA)]: https://uxlfoundation.github.io/oneDNN/v3.13/dev_guide_graph_sdpa_quantized.html
 
