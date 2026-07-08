@@ -222,17 +222,26 @@ status_t stream_impl_t::init_verbose_profiler(engine_kind_t kind) {
     if (kind != engine_kind::gpu) return status::success;
     // verbose profiling support is only for in-order queues
     if (flags() & stream_flags::out_of_order) return status::success;
+
+    // for unset queues, it is recommended to check for verbose profiling
+    // again after setting the queue
+    if (queue_) {
+        // ensure profiling is enabled on the queue before using verbose
+        // profiler
+        if (!(queue_->has_property<
+                    ::sycl::property::queue::enable_profiling>())) {
+            VWARN(primitive, exec,
+                    "SYCL queue does not have profiling enabled. "
+                    "Execution times will not be reported correctly.");
+        }
+
+        const auto backend = queue_->get_backend();
+        if (!utils::one_of(backend, ::sycl::backend::ext_oneapi_level_zero,
+                    ::sycl::backend::opencl)) {
+            return status::success;
+        }
+    }
     use_verbose_profiler_ = true;
-
-    // if the queue is set, verbose profiling is disabled for
-    // unsupported backends
-    if (!queue_) return status::success;
-
-    const auto backend = queue_->get_backend();
-    if (!utils::one_of(backend, ::sycl::backend::ext_oneapi_level_zero,
-                ::sycl::backend::opencl))
-        use_verbose_profiler_ = false;
-
     return status::success;
 }
 

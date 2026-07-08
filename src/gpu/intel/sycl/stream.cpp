@@ -73,7 +73,8 @@ status_t stream_t::init() {
         }
         impl()->set_queue(::sycl::queue(sycl_ctx, sycl_dev, props));
 
-        // Re-initializes verbose profiler to check for supported backend
+        // Re-initializes verbose profiler after setting the queue to check for
+        // supported backends and queue profiling properties
         CHECK(impl()->init_verbose_profiler(engine()->kind()));
 
     } else {
