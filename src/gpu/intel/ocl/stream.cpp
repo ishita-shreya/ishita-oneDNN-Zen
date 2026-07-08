@@ -48,11 +48,6 @@ status_t stream_t::init() {
     // set_dnnl_verbose()
     CHECK(impl()->init_verbose_profiler(engine()->kind()));
 
-    if (is_verbose_profiler_enabled()) {
-        verbose_profiler_.set(
-                utils::make_unique<xpu::ocl::verbose_profiler_t>(this));
-    }
-
     // Restore queue on successful exit, otherwise queue may be released
     // without retain
     cl_command_queue queue = impl()->queue();
@@ -87,6 +82,15 @@ status_t stream_t::init() {
         OCL_CHECK(xpu::ocl::clRetainCommandQueue(queue));
     }
     CHECK(impl()->set_queue(queue));
+
+    // Re-initializes verbose profiler after setting the queue to check for
+    // supported backends and queue profiling properties
+    CHECK(impl()->init_verbose_profiler(engine()->kind()));
+
+    if (is_verbose_profiler_enabled()) {
+        verbose_profiler_.set(
+                utils::make_unique<xpu::ocl::verbose_profiler_t>(this));
+    }
 
     if (is_profiling_enabled() || is_verbose_profiler_enabled()) {
         cl_command_queue_properties props;

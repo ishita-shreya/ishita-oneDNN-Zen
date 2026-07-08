@@ -275,6 +275,21 @@ status_t stream_impl_t::init_verbose_profiler(engine_kind_t kind) {
     if (kind != engine_kind::gpu) return status::success;
     // verbose profiling support is only for in-order queues
     if (flags() & stream_flags::out_of_order) return status::success;
+
+    // for unset queues, it is recommended to check for verbose profiling
+    // again after setting the queue
+    if (queue_) {
+        // ensure profiling is enabled on the queue before using verbose
+        // profiler
+        cl_command_queue_properties ocl_queue_props = 0;
+        OCL_CHECK(clGetCommandQueueInfo(queue_, CL_QUEUE_PROPERTIES,
+                sizeof(ocl_queue_props), &ocl_queue_props, nullptr));
+        if (!(ocl_queue_props & CL_QUEUE_PROFILING_ENABLE))
+            VWARN(primitive, exec,
+                    "OpenCL queue does not have profiling enabled. "
+                    "Execution times will not be reported correctly.");
+    }
+
     use_verbose_profiler_ = true;
     return status::success;
 }
