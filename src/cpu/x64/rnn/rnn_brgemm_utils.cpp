@@ -357,7 +357,7 @@ void rnn_brgemm_base_t::init_scratchpad(const cpu::rnn_utils::rnn_conf_t &rnn,
                 rnn.n_iter * rnn.mb * sizeof(bfloat16_t), 64);
     }
 
-    const int max_K_Block
+    const dim_t max_K_Block
             = nstl::max(rnn.KB1_blocks + 1,
                       nstl::max(rnn.KBproj_blocks + 1, rnn.KB2_blocks + 1))
             * (rnn.brgemm_fwd_iter_layer_fuse_possible ? 2 : 1);
@@ -638,8 +638,8 @@ status_t rnn_brgemm_t<prop_kind::forward>::init_kernels(
                 K, LDA, LDB, LDC, beta, max_bs);
     };
 
-    const int brgemm_n = nstl::min(rnn.N, rnn.n_block);
-    const int brgemm_n_tail = nstl::min(rnn.N, rnn.n_tail);
+    const dim_t brgemm_n = nstl::min(rnn.N, rnn.n_block);
+    const dim_t brgemm_n_tail = nstl::min(rnn.N, rnn.n_tail);
     const int max_bs_factor = rnn.brgemm_fwd_iter_layer_fuse_possible ? 2 : 1;
 
     for (int i = 0; i < num_base_kernels_; i++) {
@@ -1141,10 +1141,10 @@ static status_t init_kernels_diff_src(rnn_diff_src_brgemm_t &diff_src,
     };
 
     const auto &diff_src_conf = rnn.diff_src_brgemm;
-    const int n_diff_src = nstl::min(diff_src_conf.N, diff_src_conf.n_block);
-    const int n_diff_src_iter_tail
+    const dim_t n_diff_src = nstl::min(diff_src_conf.N, diff_src_conf.n_block);
+    const dim_t n_diff_src_iter_tail
             = nstl::min(diff_src_conf.N_iter, diff_src_conf.n_iter_tail);
-    const int n_diff_src_layer_tail
+    const dim_t n_diff_src_layer_tail
             = nstl::min(diff_src_conf.N_layer, diff_src_conf.n_layer_tail);
     const auto K_batch_size = rnn.n_gates * diff_src_conf.K_blocks;
     const auto split_gates_computation

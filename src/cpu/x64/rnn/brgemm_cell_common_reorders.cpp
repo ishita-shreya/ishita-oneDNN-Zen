@@ -23,8 +23,8 @@ namespace impl {
 namespace cpu {
 namespace x64 {
 
-src_layer_iter_transpose_t::src_layer_iter_transpose_t(const int src_ld,
-        const int dst_ld, const int rows, const int cols,
+src_layer_iter_transpose_t::src_layer_iter_transpose_t(const dim_t src_ld,
+        const dim_t dst_ld, const int rows, const int cols,
         jit_brgemm_trans_src_t *const kernel_transpose)
     : src_ld_(src_ld)
     , dst_ld_(dst_ld)

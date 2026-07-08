@@ -362,10 +362,10 @@ struct rnn_conf_t {
 
     int src_layer_ld_ = 0, src_layer_nld_ = 0;
     int src_iter_ld_ = 0, src_iter_nld_ = 0;
-    int src_iter_c_ld_ = 0, src_iter_c_nld_ = 0;
+    dim_t src_iter_c_ld_ = 0, src_iter_c_nld_ = 0;
     int dst_layer_ld_ = 0, dst_layer_nld_ = 0;
     int dst_iter_ld_ = 0, dst_iter_nld_ = 0;
-    int dst_iter_c_ld_ = 0, dst_iter_c_nld_ = 0;
+    dim_t dst_iter_c_ld_ = 0, dst_iter_c_nld_ = 0;
 
     int weights_iter_compensation_size = 0, weights_layer_compensation_size = 0;
     bool is_fwd = false, is_training = false, is_lbr = false,
@@ -650,7 +650,7 @@ struct rnn_conf_t {
 
     dim_t Nproj, Nproj_blocks, nproj_tail;
     dim_t LDAproj, LDBproj, LDCproj[4];
-    int dhc_block_peephole, dhc_tail_peephole, dhc_blocks_peephole;
+    dim_t dhc_block_peephole, dhc_tail_peephole, dhc_blocks_peephole;
     bool brgemm_fwd_iter_layer_fuse_possible = false;
 
     int nthr;
@@ -1246,7 +1246,7 @@ private:
 
     const byte *const base_ptr_;
     const size_t dt_size_;
-    const int dims_[Tdims];
+    const dim_t dims_[Tdims];
 };
 
 template <typename... Targs>
@@ -1261,7 +1261,7 @@ template <typename T>
 struct ws_gates_aoc_t {
     ws_gates_aoc_t(const rnn_conf_t &rnn, T *data)
         : gates_(data, rnn.ws_gates_nld, rnn.ws_gates_ld), DHC_(rnn.dhc) {}
-    T &operator()(int batch, int gate, int dhc) const {
+    T &operator()(dim_t batch, dim_t gate, dim_t dhc) const {
         return gates_(batch, gate * DHC_ + dhc);
     }
 
@@ -1275,7 +1275,7 @@ struct scratch_gates_aoc_t {
     scratch_gates_aoc_t(const rnn_conf_t &rnn, T *data)
         : gates_(data, rnn.scratch_gates_nld, rnn.scratch_gates_ld)
         , DHC_(rnn.dhc) {}
-    T &operator()(int batch, int gate, int dhc) const {
+    T &operator()(dim_t batch, dim_t gate, dim_t dhc) const {
         return gates_(batch, gate * DHC_ + dhc);
     }
 
@@ -1288,7 +1288,7 @@ template <typename T>
 struct weights_peephole_aoc_t {
     weights_peephole_aoc_t(const rnn_conf_t &rnn, T *data)
         : weights_peephole_(data, 3, rnn.dhc) {}
-    T &operator()(int g, int dhc) const { return weights_peephole_(g, dhc); }
+    T &operator()(dim_t g, dim_t dhc) const { return weights_peephole_(g, dhc); }
 
 private:
     const utils::array_offset_calculator<T, 2> weights_peephole_;
@@ -1364,11 +1364,11 @@ private:
 
 template <typename T>
 struct ws_states_layer_aoc_t {
-    ws_states_layer_aoc_t(const rnn_conf_t &rnn, T *data, int leading_dim)
+    ws_states_layer_aoc_t(const rnn_conf_t &rnn, T *data, dim_t leading_dim)
         : state_(data, rnn.ws_states_layer_nld, leading_dim) {}
     ws_states_layer_aoc_t(const rnn_conf_t &rnn, T *data)
         : state_(data, rnn.ws_states_layer_nld, rnn.ws_states_layer_ld) {}
-    T &operator()(int batch, int dhc) const { return state_(batch, dhc); }
+    T &operator()(dim_t batch, dim_t dhc) const { return state_(batch, dhc); }
 
 private:
     const dnnl::impl::utils::array_offset_calculator<T, 2> state_;
@@ -1376,11 +1376,11 @@ private:
 
 template <typename T>
 struct ws_states_iter_aoc_t {
-    ws_states_iter_aoc_t(const rnn_conf_t &rnn, T *data, int leading_dim)
+    ws_states_iter_aoc_t(const rnn_conf_t &rnn, T *data, dim_t leading_dim)
         : state_(data, rnn.ws_states_iter_nld, leading_dim) {}
     ws_states_iter_aoc_t(const rnn_conf_t &rnn, T *data)
         : state_(data, rnn.ws_states_iter_nld, rnn.ws_states_iter_ld) {}
-    T &operator()(int batch, int dhc) const { return state_(batch, dhc); }
+    T &operator()(dim_t batch, dim_t dhc) const { return state_(batch, dhc); }
 
 private:
     const dnnl::impl::utils::array_offset_calculator<T, 2> state_;
@@ -1390,7 +1390,7 @@ template <typename T>
 struct augru_attention_aoc_t {
     augru_attention_aoc_t(const rnn_conf_t &rnn, T *data)
         : state_(data, rnn.mb) {}
-    T &operator()(int batch) const { return state_(batch); }
+    T &operator()(dim_t batch) const { return state_(batch); }
 
 private:
     const dnnl::impl::utils::array_offset_calculator<T, 1> state_;
@@ -1401,7 +1401,7 @@ struct ws_diff_states_layer_aoc_t {
     ws_diff_states_layer_aoc_t(const rnn_conf_t &rnn, T *data)
         : diff_states_layer_(data, rnn.ws_diff_states_layer_nld,
                   rnn.ws_diff_states_layer_ld) {}
-    T &operator()(int batch, int dhc) const {
+    T &operator()(dim_t batch, dim_t dhc) const {
         return diff_states_layer_(batch, dhc);
     }
 
@@ -1414,7 +1414,7 @@ struct ws_diff_states_iter_aoc_t {
     ws_diff_states_iter_aoc_t(const rnn_conf_t &rnn, T *data)
         : diff_states_iter_(data, rnn.ws_diff_states_iter_nld,
                   rnn.ws_diff_states_iter_ld) {}
-    T &operator()(int batch, int dhc) const {
+    T &operator()(dim_t batch, dim_t dhc) const {
         return diff_states_iter_(batch, dhc);
     }
 
@@ -1427,7 +1427,7 @@ struct ws_diff_states_iter_c_aoc_t {
     ws_diff_states_iter_c_aoc_t(const rnn_conf_t &rnn, T *data)
         : diff_states_iter_c_(data, rnn.ws_diff_states_iter_c_nld,
                   rnn.ws_diff_states_iter_c_ld) {}
-    T &operator()(int batch, int dhc) const {
+    T &operator()(dim_t batch, dim_t dhc) const {
         return diff_states_iter_c_(batch, dhc);
     }
 
