@@ -85,7 +85,9 @@ status_t verbose_profiler_t::get_aggregate_exec_time(
     const auto &prof_data = profiling_data_[index];
 
     const auto &evts = prof_data.prim_events_;
-    if (evts.empty()) {
+    // Report zero execution time when when the queue was created without
+    // profiling enabled.
+    if (evts.empty() || !queue_has_profiling_) {
         duration_ms = 0.0;
         return status::success;
     }
@@ -102,29 +104,14 @@ status_t verbose_profiler_t::get_aggregate_exec_time(
         const auto &sycl_event = xpu::sycl::event_t::from(*ev);
         size_t last_idx = sycl_event.size() - 1;
         assert(last_idx >= 0);
-        try {
-            auto evbeg = sycl_event[0]
-                                 .get_profiling_info<
-                                         event_profiling::command_start>();
-            auto evend = sycl_event[last_idx]
-                                 .get_profiling_info<
-                                         event_profiling::command_end>();
-            agg_start = std::min(agg_start, evbeg);
-            agg_end = std::max(agg_end, evend);
-        } catch (const ::sycl::exception &e) {
-            // This is a check against profiling queries to the queue when
-            // the queue does not have profiling enabled. In this scenario,
-            // this results in a silent catch with execution times reported as
-            // zero.
-            const std::string msg = e.what();
-            if (msg.find("enable_profiling") == std::string::npos) {
-                VERROR(primitive, exec, "SYCL exception during profiling: %s",
-                        e.what());
-                throw;
-            }
-            agg_start = 0;
-            agg_end = 0;
-        }
+        auto evbeg
+                = sycl_event[0]
+                          .get_profiling_info<event_profiling::command_start>();
+        auto evend
+                = sycl_event[last_idx]
+                          .get_profiling_info<event_profiling::command_end>();
+        agg_start = std::min(agg_start, evbeg);
+        agg_end = std::max(agg_end, evend);
     }
 
     if (agg_end < agg_start) { return status::runtime_error; }

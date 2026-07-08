@@ -223,16 +223,17 @@ status_t stream_impl_t::init_verbose_profiler(engine_kind_t kind) {
     // verbose profiling support is only for in-order queues
     if (flags() & stream_flags::out_of_order) return status::success;
 
-    // for unset queues, it is recommended to check for verbose profiling
-    // again after setting the queue
+    // The queue may not be set yet at this point; in that case the profiler
+    // is re-initialized once the queue is created. When the queue is
+    // available, verify that it supports verbose profiling.
     if (queue_) {
-        // ensure profiling is enabled on the queue before using verbose
-        // profiler
-        if (!(queue_->has_property<
-                    ::sycl::property::queue::enable_profiling>())) {
+        // Warn if the queue does not have profiling enabled. Verbose lines
+        // are still emitted, but without execution timing information.
+        if (!queue_->has_property<
+                    ::sycl::property::queue::enable_profiling>()) {
             VWARN(primitive, exec,
                     "SYCL queue does not have profiling enabled. "
-                    "Execution times will not be reported correctly.");
+                    "Execution times will not be reported.");
         }
 
         const auto backend = queue_->get_backend();

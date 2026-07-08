@@ -35,8 +35,10 @@ struct stream_profiler_t : public xpu::stream_profiler_t {
 };
 
 struct verbose_profiler_t : public xpu::verbose_profiler_t {
-    verbose_profiler_t(const impl::stream_t *stream)
-        : xpu::verbose_profiler_t(stream), active_(true) {}
+    verbose_profiler_t(const impl::stream_t *stream, bool queue_has_profiling)
+        : xpu::verbose_profiler_t(stream)
+        , active_(true)
+        , queue_has_profiling_(queue_has_profiling) {}
 
     ~verbose_profiler_t() override { cleanup(); }
 
@@ -59,6 +61,7 @@ struct verbose_profiler_t : public xpu::verbose_profiler_t {
 
 protected:
     bool active_;
+    bool queue_has_profiling_;
 };
 
 } // namespace sycl

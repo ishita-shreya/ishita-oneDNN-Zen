@@ -91,8 +91,10 @@ status_t stream_t::init() {
         if (!args_ok) return status::invalid_arguments;
     }
     if (is_verbose_profiler_enabled()) {
-        verbose_profiler_.set(
-                utils::make_unique<xpu::sycl::verbose_profiler_t>(this));
+        const bool queue_has_profiling = queue().has_property<
+                ::sycl::property::queue::enable_profiling>();
+        verbose_profiler_.set(utils::make_unique<xpu::sycl::verbose_profiler_t>(
+                this, queue_has_profiling));
     }
     if (is_profiling_enabled() && sycl_dev.is_gpu() && !queue().is_in_order()) {
         VERROR(common, dpcpp,
@@ -107,10 +109,13 @@ status_t stream_t::init() {
 void stream_t::before_exec_hook() {
     if (is_profiling_enabled()) profiler_->start_profiling();
     if (is_verbose_profiler_enabled()) {
+        const bool queue_has_profiling = queue().has_property<
+                ::sycl::property::queue::enable_profiling>();
         auto *profiler = static_cast<xpu::sycl::verbose_profiler_t *>(
                 verbose_profiler_
                         .get_or_set(utils::make_unique<
-                                xpu::sycl::verbose_profiler_t>(this))
+                                xpu::sycl::verbose_profiler_t>(
+                                this, queue_has_profiling))
                         .get());
         // Device event profiling and SYCL graph recording are incompatible
         // because the graph execution creates a different execution context
