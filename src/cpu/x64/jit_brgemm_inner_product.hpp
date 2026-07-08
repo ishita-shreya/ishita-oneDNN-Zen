@@ -644,11 +644,11 @@ private:
     void reduce_and_convert_diff_weights_and_bias(
             const thread_info_t *ti) const;
     void transform_matrix_a_chunk(char *tr_src, const char *src,
-            int trans_batch, int current_m, int current_k) const;
+            dim_t trans_batch, dim_t current_m, dim_t current_k) const;
     void transform_matrix_b_chunk(char *tr_diff_dst, const char *diff_dst,
-            int trans_batch, int current_col_size, int current_row_size) const;
+            dim_t trans_batch, dim_t current_col_size, dim_t current_row_size) const;
     void transpose_matrix_c_chunk(const thread_info_t *ti, const dim_t ocb,
-            const dim_t icb, int oc_size, int ic_size, dim_t kd, dim_t kh,
+            const dim_t icb, dim_t oc_size, dim_t ic_size, dim_t kd, dim_t kh,
             dim_t kw, bool is_reduction = false) const;
 
     brgemm_containers::brgemm_palette_container_t brgemm_palettes_ {
