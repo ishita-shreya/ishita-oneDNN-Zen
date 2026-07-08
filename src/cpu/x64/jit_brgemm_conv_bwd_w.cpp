@@ -341,7 +341,7 @@ struct brgemm_convolution_bwd_weights_t::thread_info_t {
     int oc_b_start = 0, oc_b_end = 0, oc_b_work = 0;
     int ic_b_start = 0, ic_b_end = 0, ic_b_work = 0;
 
-    int cur_brg_idx = -1;
+    dim_t cur_brg_idx = -1;
     brgemm_batch_element_t *__restrict brg_batch;
     char *wsp_tile;
     const exec_ctx_t &exec_ctx;

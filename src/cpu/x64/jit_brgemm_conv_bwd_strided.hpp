@@ -165,7 +165,7 @@ private:
         char *c_buffer;
         char *out_buffer;
         char *wsp_tile;
-        int cur_brg_idx;
+        dim_t cur_brg_idx;
         int g, n, icb;
         int id, idb, ih, ihb, iwb;
         int occ;

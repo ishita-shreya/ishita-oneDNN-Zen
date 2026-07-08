@@ -1308,7 +1308,7 @@ struct brgemm_convolution_fwd_t<isa>::brgemm_thread_ctx_t {
     brgemm_batch_element_t *__restrict brg_batch {nullptr};
     char *__restrict c_buffer {nullptr};
     char *__restrict wsp_tile {nullptr};
-    int cur_brg_idx {-1};
+    dim_t cur_brg_idx {-1};
     int g {-1}, n {-1}, ocb {-1};
     int od {-1}, odb {-1}, oh {-1}, ohb {-1}, owb {-1};
     int icc {-1};

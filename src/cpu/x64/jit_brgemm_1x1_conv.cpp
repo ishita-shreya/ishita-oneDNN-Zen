@@ -393,7 +393,7 @@ void brgemm_1x1_convolution_fwd_t<isa>::exec_ker(
         const brgemm_exec_ctx_t &brgemm_ctx, int ithr,
         brgemm_batch_element_t *const __restrict brg_batch,
         char *const c_buffer, const char *inp_buffer, int g, int n, int ocb,
-        int od, int oh, int ow, int icc, int *last_brg_idx,
+        int od, int oh, int ow, int icc, dim_t *last_brg_idx,
         const int32_t *src_zero_points, int32_t *src_zp_comp,
         const int32_t *dst_zero_points, int32_t *s8s8_compensation,
         const void *src_scales, const void *wei_scales, const void *dst_scales,
@@ -606,7 +606,7 @@ void brgemm_1x1_convolution_fwd_t<isa>::execute_os_blocking(
 
         int last_n = -1;
         int last_g = -1;
-        int last_brg_idx = -1;
+        dim_t last_brg_idx = -1;
         int start {0}, end {0};
         balance211(work_amount, nthr, ithr, start, end);
         int n {0}, g {0}, ocb {0}, oss {0};
@@ -692,7 +692,7 @@ void brgemm_1x1_convolution_fwd_t<isa>::execute_full_spatial(
             dst_scales_inv_ptr[0] = 1.f / dst_scales_ptr[0];
         }
 
-        int last_brg_idx = -1;
+        dim_t last_brg_idx = -1;
         int start {0}, end {0};
         balance211(work_amount, nthr, ithr, start, end);
         int n {0}, g {0}, ocb {0}, od {0}, oh {0}, owb {0};

@@ -121,7 +121,7 @@ private:
     void exec_ker(const brgemm_exec_ctx_t &brgemm_ctx, int ithr,
             brgemm_batch_element_t *const __restrict brg_batch,
             char *const c_buffer, const char *inp_buffer, int g, int n, int ocb,
-            int od, int oh, int ow, int icc, int *last_brg_idx,
+            int od, int oh, int ow, int icc, dim_t *last_brg_idx,
             const int32_t *src_zero_points, int32_t *src_zp_comp,
             const int32_t *dst_zero_points, int32_t *s8s8_compensation,
             const void *src_scales, const void *wei_scales,
