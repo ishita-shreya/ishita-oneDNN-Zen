@@ -1138,7 +1138,7 @@ void dnnl::impl::cpu::x64::jit_brgemm_kernel_post_ops_t<Vmm>::generate() {
                     ? 24
                     : (brg_.is_fp8_via_convert() ? 23 : max_vregs_ - 4));
     m_max_regs /= n_block;
-    int m_block = nstl::min(brg_.bcast_dim, m_max_regs);
+    int m_block = static_cast<int>(nstl::min<dim_t>(brg_.bcast_dim, m_max_regs));
 
     int mb = brg_.bcast_dim / m_block;
     int mb_tail = brg_.bcast_dim % m_block;
