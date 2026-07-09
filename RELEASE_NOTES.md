@@ -76,7 +76,7 @@
   and will be removed in future releases. If you are using this API, consider switching to the [matmul primitive].
 * `f4_e3m0` data type is deprecated and will be removed in future releases.
 * Optimizations for Intel Iris Xe MAX Graphics and Intel Graphics included with 11th-14th Generation Intel Core Processors are deprecated and will be removed in future releases.
-
+* Optimizations for processors with Intel SSE4.1 support and Intel AVX support are deprecated and will be removed in the future releases.
 
 [BLAS-like API]: https://uxlfoundation.github.io/oneDNN/v3.13/group_dnnl_api_blas.html
 [matmul primitive]: https://uxlfoundation.github.io/oneDNN/v3.13/dev_guide_matmul.html
