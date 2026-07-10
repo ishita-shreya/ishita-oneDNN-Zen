@@ -205,7 +205,7 @@ void emit_microkernel(ir::ir_t &ir, const brgemv_ir_conf_t &cfg,
     ir.vload(x, x_ptr, 0);
     for (int i = 0; i < (int)acc.size(); i++) {
         ir.vload(a, a_ptr, cfg.dt_sz_a * (dim_t)i * cfg.lda);
-        ir.vfma(acc[i], a, x);
+        ir.vdot(acc[i], a, x);
     }
 }
 
@@ -221,7 +221,7 @@ void emit_microkernel_tail(ir::ir_t &ir, const brgemv_ir_conf_t &cfg,
     for (int i = 0; i < (int)acc.size(); i++) {
         ir.vload_masked(a, a_ptr, cfg.dt_sz_a * (dim_t)i * cfg.lda, mask,
                 (int)cfg.k_tail);
-        ir.vfma(acc[i], a, x);
+        ir.vdot(acc[i], a, x);
     }
 }
 
